@@ -3,6 +3,7 @@ import random
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import time
 
 
 def y(x1, x2):
@@ -37,6 +38,19 @@ def flat_crossover(parents, n_children):
     return children
 
 
+def arithmetical_crossover(parents, n_children):
+    children = np.empty((n_children, parents.shape[1]), dtype=float)
+
+    w = random.random()
+    for i, pair in enumerate(pairs(parents, n_children)):
+        if i % 2 == 0:
+            children[i] = w*pair[0][0] + (1 - w)*pair[1][0], w*pair[0][1] + (1 - w)*pair[1][1]
+        else:
+            children[i] = w*pair[1][0] + (1 - w) * pair[0][0], w*pair[1][1] + (1 - w) * pair[0][1]
+
+    return children
+
+
 def mutation(children, mutation_prob, scope):
     mutated_children = np.copy(children)
 
@@ -56,30 +70,12 @@ def reduce_population(parents, children, pop_size):
     return new_population
 
 
-def ga_search(f, n_params, scope, num_generations=100, population_size=8,
-              n_parents=4, mutation_prob=0.01, n_grandparents=2):
-    population = np.random.uniform(low=scope[0], high=scope[1], size=(population_size, n_params))
-
-    for generation in range(num_generations):
-        fitness = calc_fitness(f, population)
-        population = population[np.flip(fitness.argsort(), axis=0)]
-        print(fitness)
-        if generation == num_generations - 1:
-            return population[0]
-        parents = population[:n_parents]
-        children = flat_crossover(parents, population_size - n_grandparents)
-        children = mutation(children, mutation_prob, scope)
-        population = reduce_population(parents, children, population_size)
-
-
-if __name__ == '__main__':
-    res = ga_search(f=y, n_params=2, scope=(-2.048, 2.048), num_generations=100)
-
+def draw_surface(f, scope):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
-    X1 = np.arange(-2.048, 2.048, 0.25)
-    X2 = np.arange(-2.048, 2.048, 0.25)
+    X1 = np.arange(scope[0], scope[1], 0.25)
+    X2 = np.arange(scope[0], scope[1], 0.25)
     X1, X2 = np.meshgrid(X1, X2)
     Y = y(X1, X2)
 
@@ -88,6 +84,41 @@ if __name__ == '__main__':
 
     fig.colorbar(surf, shrink=0.5, aspect=5)
 
-    ax.plot([res[0]], [res[1]], zs=y(res[0], res[1]), markersize=6, marker='o', color='red')
+    plot_population, = ax.plot([], [], [], 'x', markersize=6, color='red')
+    plt.draw()
 
-    plt.show()
+    return plot_population
+
+
+def draw_population(population, plot_data, f):
+    plot_data.set_xdata(population[:, 0])
+    plot_data.set_ydata(population[:, 1])
+    plot_data.set_3d_properties(f(population[:, 0], population[:, 1]))
+    plt.draw()
+    plt.pause(1e-17)
+    time.sleep(0.1)
+
+
+def ga_search(f, n_params, scope, num_generations=100, population_size=8,
+              n_parents=4, mutation_prob=0.01, n_grandparents=2):
+    plot_population = draw_surface(f, scope)
+    population = np.random.uniform(low=scope[0], high=scope[1], size=(population_size, n_params))
+
+    for generation in range(num_generations):
+        fitness = calc_fitness(f, population)
+        population = population[np.flip(fitness.argsort(), axis=0)]
+
+        draw_population(population, plot_population, f)
+
+        if generation == num_generations - 1:
+            draw_population(population[:1], plot_population, f)
+            plt.show()
+
+        parents = population[:n_parents]
+        children = arithmetical_crossover(parents, population_size - n_grandparents)
+        children = mutation(children, mutation_prob, scope)
+        population = reduce_population(parents, children, population_size)
+
+
+if __name__ == '__main__':
+    ga_search(f=y, n_params=2, scope=(-2.048, 2.048), num_generations=100, population_size=16, n_parents=8)
